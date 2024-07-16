@@ -248,7 +248,7 @@ For more detailed information about port forwarding using AWS Systems Manager Se
 
 ## Prompting LLM using RAG with Knowledge Graph 
 
-Under the hood, we will be utilizing LangChain  which is an open-source framework designed to make building generative AI applications powered by LLMs easier. It facilitates building a program that can answer your questions or complete tasks based on its understanding of natural language. LangChain simplifies the process of creating these applications by providing building blocks and tools for developers.
+Under the hood, we will be utilizing **LangChain** which is an open-source framework designed to make building generative AI applications powered by LLMs easier. It facilitates building a program that can answer your questions or complete tasks based on its understanding of natural language. LangChain simplifies the process of creating these applications by providing building blocks and tools for developers.
 
 Manually crafting intricate SPARQL queries for knowledge graph exploration can be a tedious task. Ideally, our LLM should automatically generate these queries when presented with natural language questions seeking contextually enriched responses from the IMDb database. This is where LangChain steps in, providing an abstraction layer that eliminates the need for manual SPARQL query construction. By integrating with our Amazon Bedrock-hosted LLM and Streamlit front end, LangChain enables the automatic generation of SPARQL queries tailored to our knowledge graph stored within the Amazon Neptune database.
 
