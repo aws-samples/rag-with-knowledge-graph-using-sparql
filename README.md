@@ -278,6 +278,8 @@ Feel free to experiement with different prompts. Here are some examples:
 
 `Recommend me 5 dramas which are strictly movies that have a rating greater than 9.0`
 
+`Recommend me a movie starring Al Pacino`
+
 # Clean up
 
 After you are done, delete all of the resources that you created in the process to avoid accrual of charges. 
