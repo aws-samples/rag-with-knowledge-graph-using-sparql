@@ -252,7 +252,7 @@ Under the hood, we will be utilizing LangChain  which is an open-source framewor
 
 Manually crafting intricate SPARQL queries for knowledge graph exploration can be a tedious task. Ideally, our LLM should automatically generate these queries when presented with natural language questions seeking contextually enriched responses from the IMDb database. This is where LangChain steps in, providing an abstraction layer that eliminates the need for manual SPARQL query construction. By integrating with our Amazon Bedrock-hosted LLM and Streamlit front end, LangChain enables the automatic generation of SPARQL queries tailored to our knowledge graph stored within the Amazon Neptune database.
 
-Here is how you can start prompting:
+**Here is how you can start prompting:**
 
 On the left sidebar, select `RAG` to change to the RAG page. You can start testing RAG with Knowledge Graph by asking the LLM  questions. For example, 
 
