@@ -1,4 +1,4 @@
-# Retrieval Augemented Generation (RAG) with Knowledge Graph using SPARQL 
+# Retrieval Augmented Generation (RAG) with Knowledge Graph using SPARQL 
 
 ## Retrieval Augmented Generation (RAG)
 
