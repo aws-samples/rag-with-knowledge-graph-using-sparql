@@ -29,7 +29,7 @@ Architecture has the following components:
 - **Amazon S3**: Object store for Resource Description Framework (RDF) formatted IMDb dataset.
 - **Amazon Neptune**: Graph database service ingests IMDb dataset from S3 bucket to create a Knowledge Graph.
 - **Amazon VPC Gateway Endpoint**: Interface to allow dedicated private web connection between S3 and VPC to faciltate secure data transfer between S3 and Neptune.
-- **Amazon Bedrock**: LLM hosting service which calls LLM to query Knowledge Graph to retrieve additonal context for response augmentation. 
+- **Amazon Bedrock**: LLM hosting service which calls LLM to query Knowledge Graph to retrieve additonal context for response augmentation.
 
 ![Knowledge Graph RAG Architecture](static/architecture_diagram.png)
 
@@ -246,7 +246,13 @@ For more detailed information about port forwarding using AWS Systems Manager Se
 - Ensure your local port 8501 isn't being used by another application.
 - If you have issues with the Session Manager plugin, ensure it's correctly installed and your AWS CLI is up to date.
 
-## Prompting  LLM using RAG  with Knowledge Graph 
+## Prompting LLM using RAG with Knowledge Graph 
+
+Under the hood, we will be utilizing LangChain  which is an open-source framework designed to make building generative AI applications powered by LLMs easier. It facilitates building a program that can answer your questions or complete tasks based on its understanding of natural language. LangChain simplifies the process of creating these applications by providing building blocks and tools for developers.
+
+Manually crafting intricate SPARQL queries for knowledge graph exploration can be a tedious task. Ideally, our LLM should automatically generate these queries when presented with natural language questions seeking contextually enriched responses from the IMDb database. This is where LangChain steps in, providing an abstraction layer that eliminates the need for manual SPARQL query construction. By integrating with our Amazon Bedrock-hosted LLM and Streamlit front end, LangChain enables the automatic generation of SPARQL queries tailored to our knowledge graph stored within the Amazon Neptune database.
+
+Here is how you can start prompting:
 
 On the left sidebar, select `RAG` to change to the RAG page. You can start testing RAG with Knowledge Graph by asking the LLM  questions. For example, 
 
