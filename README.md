@@ -126,7 +126,7 @@ Note: S3 Bucket names must be globally unique so if you get an error `Bucket nam
 
 1. After you create the bucket, open the bucket and choose **Upload** 
 
-2. Upload the following files: [main.yaml](/iac/main.yaml), [vpc.yaml](/iac/vpc.yaml), [neptune.yaml](/iac/neptune.yaml), and [imdb.ttl.gz](https://d2d0sxdakci6ar.cloudfront.net/imdb.ttl.gz).
+2. Upload the following files: [main.yaml](/iac/main.yaml), [vpc.yaml](/iac/vpc.yaml), [neptune.yaml](/iac/neptune.yaml), and [imdb.ttl.gz](/imdb.ttl.gz).
 
 ![s3_upload](static/upload-files-to-s3.png)
 3. Once successfully attached, upload the files to the bucket.
