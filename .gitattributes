@@ -1,0 +1,2 @@
+*.ttl.gz filter=lfs diff=lfs merge=lfs -text
+imdb.ttl.gz filter=lfs diff=lfs merge=lfs -text
