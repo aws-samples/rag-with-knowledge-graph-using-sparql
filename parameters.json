@@ -1,0 +1,42 @@
+[
+  {
+    "ParameterKey": "S3BucketName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "TTLFileKey",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "SubnetId1",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "SubnetId2",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "NeptunePort",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "NotebookInstanceType",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "AllowedIP",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "SageMakerNotebookName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "NotebookS3BucketLocation",
+    "ParameterValue": ""
+  }
+]

@@ -1,0 +1,335 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploys a VPC, an Amazon Neptune cluster, a SageMaker notebook, and an EC2 instance configured for Streamlit with Neptune and Bedrock permissions.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: NeptuneBedrockRAG
+    Description: 'An environment name that is prefixed to resource names'
+
+  VpcCIDR:
+    Type: String
+    Default: 10.192.0.0/16
+    Description: 'Please enter the IP range (CIDR notation) for this VPC'
+
+  PublicSubnet1CIDR:
+    Type: String
+    Default: 10.192.10.0/24
+    Description: 'Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone'
+
+  PublicSubnet2CIDR:
+    Type: String
+    Default: 10.192.11.0/24
+    Description: 'Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone'
+
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: 10.192.20.0/24
+    Description: 'Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone'
+
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: 10.192.21.0/24
+    Description: 'Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone'
+
+  S3BucketName:
+    Type: String
+    Description: 'Name of the S3 bucket containing the TTL file'
+
+  TTLFileKey:
+    Type: String
+    Default: imdb.ttl.gz
+    Description: 'S3 key (path) of the TTL file within the bucket'
+
+  NeptunePort:
+    Type: Number
+    Default: 8182
+    Description: The port number for the Neptune instance.
+
+  NotebookInstanceType:
+    Type: String
+    Default: ml.t3.medium
+    Description: The instance type for the Neptune notebook.
+
+  AllowedIP:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: The IP address range allowed to access the Neptune instance (in CIDR notation).
+
+  NeptuneNotebookName:
+    Type: String
+    Default: Neptune-Notebook
+    Description: The name of the Neptune notebook.
+
+  NeptuneClusterAuthMode:
+    Type: String
+    Default: DEFAULT
+    AllowedValues:
+      - DEFAULT
+      - IAM
+    Description: 'The IAM authentication mode on the specified Neptune cluster.'
+
+Resources:
+  VPCStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.amazonaws.com/${S3BucketName}/vpc.yaml'
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        VpcCIDR: !Ref VpcCIDR
+        PublicSubnet1CIDR: !Ref PublicSubnet1CIDR
+        PublicSubnet2CIDR: !Ref PublicSubnet2CIDR
+        PrivateSubnet1CIDR: !Ref PrivateSubnet1CIDR
+        PrivateSubnet2CIDR: !Ref PrivateSubnet2CIDR
+        S3BucketName: !Ref S3BucketName
+
+  NeptuneStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://s3.amazonaws.com/${S3BucketName}/neptune.yaml'
+      Parameters:
+        VpcId: !GetAtt VPCStack.Outputs.VPC
+        SubnetId1: !GetAtt VPCStack.Outputs.PrivateSubnet1
+        SubnetId2: !GetAtt VPCStack.Outputs.PrivateSubnet2
+        S3BucketName: !Ref S3BucketName
+        TTLFileKey: !Ref TTLFileKey
+        NeptunePort: !Ref NeptunePort
+        NotebookInstanceType: !Ref NotebookInstanceType
+        AllowedIP: !Ref AllowedIP
+        NeptuneNotebookName: !Ref NeptuneNotebookName
+        NeptuneClusterAuthMode: !Ref NeptuneClusterAuthMode
+        S3Endpoint: !GetAtt VPCStack.Outputs.S3Endpoint
+
+  StreamlitSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Streamlit EC2 instance
+      VpcId: !GetAtt VPCStack.Outputs.VPC
+      SecurityGroupEgress:
+      # https enabled to ssm
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description:  Allow https traffic to SSM endpoints from anywhere
+        - IpProtocol: tcp
+          FromPort: !Ref NeptunePort
+          ToPort: !Ref NeptunePort
+          CidrIp: !Ref VpcCIDR
+          Description:  Allow https traffic to neptune in VPC
+
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EC2AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${S3BucketName}'
+                  - !Sub 'arn:aws:s3:::${S3BucketName}/*'
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:PutMetricData'
+                  - 'cloudwatch:GetMetricStatistics'
+                  - 'cloudwatch:ListMetrics'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogStreams'
+                Resource: 
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*'
+              - Effect: Allow
+                Action:
+                  - 'neptune-db:*'
+                Resource: 
+                  - !Sub 'arn:aws:neptune-db:${AWS::Region}:${AWS::AccountId}:${NeptuneStack.Outputs.NeptuneClusterResourceId}/*'
+              - Effect: Allow
+                Action:
+                  - 'bedrock:InvokeModel'
+                Resource: 
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/*'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.medium
+      EbsOptimized: true
+      Monitoring: true
+      SubnetId: !GetAtt VPCStack.Outputs.PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref StreamlitSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      ImageId: !Sub "resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+      UserData: 
+        Fn::Base64: |
+            #!/bin/bash
+            sudo dnf install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+            sudo systemctl status amazon-ssm-agent
+            sudo systemctl start amazon-ssm-agent
+            sudo -u ec2-user bash << 'EOF'
+            sudo dnf install python3 python3-pip nodejs -y
+            sudo pip3 install awscli --upgrade
+            mkdir ~/streamlit
+            cat << 'SCRIPT' > ~/streamlit/main.py
+            import streamlit as st
+            import boto3
+            import configparser
+            from langchain_community.chains.graph_qa.neptune_sparql import NeptuneSparqlQAChain
+            from langchain_aws import ChatBedrock
+            from langchain_community.graphs import NeptuneRdfGraph
+            import os
+
+            logger = st.logger.get_logger(__name__)
+
+            config = configparser.ConfigParser()
+            config_file_path = os.path.join(os.path.expanduser("~"), "streamlit", "settings.cfg")
+            config.read(config_file_path)
+
+            host = config.get("default", "host", fallback="")
+            port = config.getint("default", "port", fallback=8182)
+            region = config.get("default", "region", fallback="us-east-1")
+            model_id = config.get(
+                "default", "model_id", fallback="anthropic.claude-3-sonnet-20240229-v1:0"
+            )
+
+            chain = None
+
+            def initialize_chain(host, port, region, model_id):
+                global chain
+
+                bedrock_client = boto3.client("bedrock-runtime", region_name=region)
+                graph = NeptuneRdfGraph(
+                    host=host,
+                    port=port,
+                    use_iam_auth=True,
+                    region_name=region,
+                    use_https=True,
+                )
+                llm = ChatBedrock(model_id=model_id, client=bedrock_client)
+                chain = NeptuneSparqlQAChain.from_llm(
+                    llm=llm,
+                    graph=graph,
+                    verbose=True,
+                    top_K=10,
+                    return_intermediate_steps=True,
+                    return_direct=False,
+                )
+                logger.info("Chain initialized")
+
+            def app():
+                pages = {
+                    "Settings": settings_page,
+                    "RAG": rag_page,
+                }
+
+                st.sidebar.title("Navigation")
+                selection = st.sidebar.radio("Go to", list(pages.keys()))
+                pages[selection]()
+
+            def settings_page():
+                st.title("Settings")
+                host = st.text_input(
+                    "Neptune Host", value=config.get("default", "host", fallback="")
+                )
+                port = st.number_input(
+                    "Neptune Port", value=config.getint("default", "port", fallback=8182)
+                )
+                region = st.text_input(
+                    "AWS Region", value=config.get("default", "region", fallback="us-east-1")
+                )
+                model_id = st.text_input(
+                    "Model ID",
+                    value=config.get(
+                        "default", "model_id", fallback="anthropic.claude-3-sonnet-20240229-v1:0"
+                    ),
+                )
+                if st.button("Save Settings"):
+                    config["default"] = {
+                        "host": host,
+                        "port": str(port),
+                        "region": region,
+                        "model_id": model_id,
+                    }
+                    with open(config_file_path, "w") as configfile:
+                        config.write(configfile)
+                    st.success("Settings saved successfully!")
+                    initialize_chain(host, port, region, model_id)
+
+            def rag_page():
+                st.title("Retrieval Augmented Generation with Knowledge Graphs using SPARQL")
+                query = st.text_area("Enter your query")
+                if st.button("Submit"):
+                    if chain is None:
+                        initialize_chain(host, port, region, model_id)
+                    if chain is not None:
+                        result = chain.invoke(query)
+                        st.write("Result:")
+                        st.write(result["result"])
+                        st.write("Generated SPARQL:")
+                        st.code(result["intermediate_steps"][0]["query"])
+                        st.write("Full Context:")
+                        st.json(result["intermediate_steps"][1]["context"], expanded=False)
+                    else:
+                        st.error("Chain initialization failed. Please try again.")
+
+            if __name__ == "__main__":
+                app()
+            SCRIPT
+
+            cat << 'CONFIG' > ~/.aws/config
+            [default]
+            region = us-east-1
+            credential_source = Ec2InstanceMetadata
+            CONFIG
+
+            pip install --user boto3 streamlit langchain langchain-aws langchain-community awscli
+            echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc
+            source ~/.bashrc
+            sudo npm install pm2@latest -g
+            pm2 start "streamlit run ~/streamlit/main.py --server.port 8501"
+            pm2 startup systemd
+            pm2 save
+            pm2 install pm2-logrotate
+            EOF
+
+Outputs:
+  VPCId:
+    Value: !GetAtt VPCStack.Outputs.VPC
+  PublicSubnets:
+    Value: !GetAtt VPCStack.Outputs.PublicSubnets
+  PrivateSubnets:
+    Value: !GetAtt VPCStack.Outputs.PrivateSubnets
+  NeptuneEndpoint:
+    Value: !GetAtt NeptuneStack.Outputs.NeptuneEndpoint
+  NeptuneClusterId:
+    Value: !GetAtt NeptuneStack.Outputs.NeptuneClusterId
+  NeptuneClusterResourceId:
+    Value: !GetAtt NeptuneStack.Outputs.NeptuneClusterResourceId
+  DataLoadCommand:
+    Description: Command to load data into Neptune
+    Value: !GetAtt NeptuneStack.Outputs.NeptuneLoadCommand
+  SSMStartSessionCommand:
+    Description: Command to start SSM session with port forwarding to Streamlit UI
+    Value: !Sub 'aws ssm start-session --target "${EC2Instance}" --document-name AWS-StartPortForwardingSession --parameters portNumber="8501",localPortNumber="8501"'

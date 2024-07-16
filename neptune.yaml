@@ -1,0 +1,226 @@
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: 'Name of the S3 bucket containing the TTL file'
+
+  TTLFileKey:
+    Type: String
+    Description: 'S3 key (path) of the TTL file within the bucket'
+    Default: imdb.ttl.gz
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: The ID of the VPC where the Neptune cluster and notebook will be deployed.
+
+  SubnetId1:
+    Type: AWS::EC2::Subnet::Id
+    Description: The ID of the subnet where the Neptune instance will be deployed.
+
+  SubnetId2:
+    Type: AWS::EC2::Subnet::Id
+    Description: The ID of the subnet where the Neptune instance will be deployed.
+
+  NeptunePort:
+    Type: Number
+    Description: The port number for the Neptune instance.
+
+  NotebookInstanceType:
+    Type: String
+    Description: The instance type for the Neptune notebook.
+    Default: ml.m5d.large
+
+  AllowedIP:
+    Type: String
+    Description: The IP address range allowed to access the Neptune instance (in CIDR notation).
+
+  SageMakerNotebookName:
+    Description: The name of the Neptune notebook.
+    Type: String
+
+  NeptuneClusterAuthMode:
+    Description: 'The IAM authentication mode on the specified Neptune cluster.'
+    Type: String
+    Default: DEFAULT
+    AllowedValues:
+      - DEFAULT
+      - IAM
+
+  NotebookS3BucketLocation:
+    Description: 'Name of the S3 bucket where the Notebook is located'
+    Type: String
+
+Resources:
+  NeptuneSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Neptune instance
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref NeptunePort
+          ToPort: !Ref NeptunePort
+          CidrIp: !Ref AllowedIP
+
+  NeptuneSubnetGroup:
+    Type: AWS::Neptune::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for Neptune instance
+      SubnetIds:
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+
+  NeptuneRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:Get*
+                  - s3:List*
+                Resource: "*"
+
+  NeptuneCluster:
+    Type: AWS::Neptune::DBCluster
+    Properties:
+      AssociatedRoles:
+        - RoleArn: !GetAtt NeptuneRole.Arn
+      DBSubnetGroupName: !Ref NeptuneSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref NeptuneSecurityGroup
+      Port: !Ref NeptunePort
+      ServerlessScalingConfiguration:
+        MinCapacity: 1.0
+        MaxCapacity: 128.0
+
+  NeptuneInstance:
+    Type: AWS::Neptune::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref NeptuneCluster
+      DBInstanceClass: db.serverless
+
+## Notebook setup
+  SageMakerNotebookInstanceSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for SageMaker notebook instance
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 8182
+          ToPort: 8182
+          DestinationSecurityGroupId: !Ref NeptuneSecurityGroup
+
+  NeptuneNotebookInstance:
+    Type: AWS::SageMaker::NotebookInstance
+    Properties:
+      NotebookInstanceName: !Join
+                          - ''
+                          - - 'aws-neptune-'
+                            - !Ref SageMakerNotebookName
+      InstanceType:
+        Ref: NotebookInstanceType
+      SubnetId:
+        Ref: SubnetId1
+      SecurityGroupIds:
+        - !Ref SageMakerNotebookInstanceSG
+      RoleArn: !GetAtt NeptuneNotebookRole.Arn
+      LifecycleConfigName:
+        Fn::GetAtt:
+        - NeptuneNotebookInstanceLifecycleConfig
+        - NotebookInstanceLifecycleConfigName
+      Tags:
+        - Key: "aws-neptune-cluster-id"
+          Value: !Ref NeptuneCluster
+        - Key: "aws-neptune-resource-id"
+          Value: !GetAtt NeptuneCluster.ClusterResourceId
+
+  NeptuneNotebookInstanceLifecycleConfig:
+    Type: AWS::SageMaker::NotebookInstanceLifecycleConfig
+    Properties:
+      OnStart:
+      - Content:
+          Fn::Base64:
+            Fn::Join:
+            - ''
+            - - "#!/bin/bash\n"
+              - sudo -u ec2-user -i << 'EOF'
+              - "\n"
+              - echo 'export GRAPH_NOTEBOOK_AUTH_MODE=
+              - !Ref NeptuneClusterAuthMode
+              - "' >> ~/.bashrc\n"
+              - echo 'export GRAPH_NOTEBOOK_HOST=
+              - !GetAtt NeptuneCluster.Endpoint
+              - "' >> ~/.bashrc\n"
+              - echo 'export GRAPH_NOTEBOOK_PORT=
+              - !Ref NeptunePort
+              - "' >> ~/.bashrc\n"
+              - echo 'export NEPTUNE_LOAD_FROM_S3_ROLE_ARN=
+              - "' >> ~/.bashrc\n"
+              - echo 'export AWS_REGION=
+              - !Ref AWS::Region
+              - "' >> ~/.bashrc\n"
+              - aws s3 cp s3://aws-neptune-notebook/graph_notebook.tar.gz /tmp/graph_notebook.tar.gz
+              - "\n"
+              - rm -rf /tmp/graph_notebook
+              - "\n"
+              - tar -zxvf /tmp/graph_notebook.tar.gz -C /tmp
+              - "\n"
+              - /tmp/graph_notebook/install.sh
+              - "\n"
+              - EOF
+
+  NeptuneNotebookRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: NeptuneNotebookPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:Get*'
+                  - 's3:List*'
+                  - 'cloudwatch:*'
+                Resource:
+                  - '*'
+              - Effect: Allow
+                Action:
+                  - 'neptune-db:*'
+                Resource:
+                  - !Sub 'arn:aws:neptune-db:${AWS::Region}:${AWS::AccountId}:${NeptuneCluster.Endpoint}/*'
+                  - '*'
+              - Effect: Allow
+                Action:
+                  - 'bedrock:*'
+                Resource: 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-3-sonnet*'
+
+Outputs:
+  NeptuneEndpoint:
+    Description: The endpoint for the Neptune cluster
+    Value: !GetAtt NeptuneCluster.Endpoint
+  NeptuneClusterId:
+    Value: !Ref NeptuneCluster
+  NeptuneClusterResourceId:
+    Value: !GetAtt NeptuneCluster.ClusterResourceId

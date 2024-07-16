@@ -1,0 +1,6 @@
+boto3
+streamlit
+langchain
+langchain-aws
+langchain-community
+awscli
