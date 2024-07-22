@@ -294,3 +294,16 @@ In this post, we presented a solution that allows you to implement Knowledge Gra
 # License
 
 This library is licensed under the MIT-0 License. See the LICENSE file.
+
+# Citations
+
+IMDB Dataset:
+
+Torres Izquierdo, Yenier; Casanova, Marco Antonio; Menendez, Elisa; Portes Paes Leme, Luiz André; Lemos, Melissa; García, Grettel Monteagudo (2019). imdb_data_with_rdf_schema. figshare. Dataset. https://doi.org/10.6084/m9.figshare.7988795.v3
+
+# Contacts 
+
+[Varun Jasti](awsjasti@amazon.com)
+[Ali Donmez](adonmez@amazon.com)
+[Baladithya Balamurugan](baladita@amazon.com)
+[Tafadzwa Chimbindi](tafadc@amazon.com)
