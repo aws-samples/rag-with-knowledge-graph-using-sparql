@@ -303,7 +303,7 @@ Torres Izquierdo, Yenier; Casanova, Marco Antonio; Menendez, Elisa; Portes Paes 
 
 # Contacts 
 
-[Varun Jasti](awsjasti@amazon.com)
-[Ali Donmez](adonmez@amazon.com)
-[Baladithya Balamurugan](baladita@amazon.com)
-[Tafadzwa Chimbindi](tafadc@amazon.com)
+- **Varun Jasti** - awsjasti@amazon.com
+- **Ali Donmez** - adonmez@amazon.com
+- **Baladithya Balamurugan** - baladita@amazon.com
+- **Tafadzwa Chimbindi** - tafadc@amazon.com
